@@ -8,6 +8,10 @@ namespace Navis_Plug.Models
 {
     public class Space
     {
+        public Space()
+        {
+            activities = new List<Activity>();
+        }
         public List<Activity> activities { get; set; }
 
 }

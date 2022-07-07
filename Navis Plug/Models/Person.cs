@@ -8,6 +8,10 @@ namespace Navis_Plug.Models
 {
     public class Person
     {
+        public Person()
+        {
+            activities = new();
+        }
         public List<ActivityIteration> activities { get; set; }
     }
 }
