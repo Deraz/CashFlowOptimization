@@ -13,5 +13,6 @@ namespace Navis_Plug.Models
             activities = new();
         }
         public List<ActivityIteration> activities { get; set; }
+        public long TotalDuration { get; set; }
     }
 }
