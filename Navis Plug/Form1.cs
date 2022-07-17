@@ -1,5 +1,7 @@
 using Navis_Plug.CPMModels;
 using Navis_Plug.Models;
+using IronXL;
+using System.Linq;
 
 namespace Navis_Plug
 {
@@ -13,13 +15,13 @@ namespace Navis_Plug
         private void button1_Click(object sender, EventArgs e)
         {
             int targetDuration = 0;
-            double targetCost = 4800000;
-            Space space = GetSpace();
+            double targetCost;
+            Space space = GetSpace(out targetCost);
             List<Person> population = GeneratePopulation(space);
             int generation = 1;
             long minDurationReached = long.MaxValue;
             int consistency = 0;
-            int maximumConsitency = 90;
+            int maximumConsitency = 500;
             while (minDurationReached > targetDuration && consistency < maximumConsitency)
             {
                 long newMinDuration;
@@ -60,8 +62,24 @@ namespace Navis_Plug
                     break;
                 }
             }
-            Console.WriteLine(population[targetIndex].TotalDuration);
-            Console.WriteLine(cost);
+            var output = population[targetIndex];
+            using (StreamWriter writer = new StreamWriter("output.csv", false))
+            {
+                writer.WriteLine("Activity Name,Activity ID,Duration,Cost,Predecessors");
+                writer.WriteLine("All Activities,,"+ output.TotalDuration+"," + cost + ",");
+                foreach (var act in output.activities)
+                {
+                    var str = act.Name + "," + act.Id + "," + act.Iteration.Duration + "," + act.Iteration.Cost + ",";
+                    foreach (var dep in act.Dependencies)
+                    {
+                        str += dep+"-";
+                    }
+                    writer.WriteLine(str.Substring(0,str.Length - 1));
+                }
+            }
+
+            this.textBox1.Text = "DONE!";
+
         }
 
         private Person GenerateRandomPerson(Space space)
@@ -114,10 +132,6 @@ namespace Navis_Plug
                 var list = GetActivities();
                 var newfitness = Output(list.Shuffle().CriticalPath(p => p.Predecessors, l => (long)l.Duration));
                 if(newfitness < fitness) fitness = newfitness;
-                if (newfitness == 0)
-                {
-                    Console.WriteLine("skfndflgfdkdf");
-                }
                 person.TotalDuration = newfitness;
             }
             population.Sort(delegate (Person p1, Person p2) { return p1.TotalDuration.CompareTo(p2.TotalDuration); });
@@ -176,8 +190,6 @@ namespace Navis_Plug
             var input = System.IO.File.ReadAllLines("input.txt");
             var ad = new Dictionary<string, CPMModels.Activity>();
             var deferredList = new Dictionary<CPMModels.Activity, List<string>>();
-
-            int inx = 0;
             foreach (var line in input)
             {
                 var activity = new CPMModels.Activity();
@@ -240,129 +252,42 @@ namespace Navis_Plug
             return GetFreeEndActivities(list);
         }
 
-        private Space GetSpace()
+        private Space GetSpace(out double targetCost)
         {
+            WorkBook workbook = WorkBook.Load("test.xlsx");
+            WorkSheet sheet = workbook.WorkSheets.First();
+            targetCost = sheet.Rows[1].Columns[4].DoubleValue * 1.1;
+            var numberOfActivities = sheet.RowCount - 2;
             var space = new Space();
             space.activities = new();
-            var act1 = new Models.Activity()
+            for (int i = 0; i < numberOfActivities; i++)
             {
-                Id = "A35760",
-                Name = "Borehole test",
-                Dependencies = new(),
-                Iterations = new List<Iteration>()
-            };
-            act1.Iterations.Add(new() { Cost = 0, Duration = 7 });
-            act1.Iterations.Add(new() { Cost = 0, Duration = 7 });
-            act1.Iterations.Add(new() { Cost = 0, Duration = 7 });
-            act1.Iterations.Add(new() { Cost = 0, Duration = 7 });
-            act1.Iterations.Add(new() { Cost = 0, Duration = 7 });
-            space.activities.Add(act1);
+                var row = sheet.Rows[i + 2];
+                var act = new Models.Activity()
+                {
+                    Name = row.Columns[0].StringValue.Trim(),
+                    Id = row.Columns[1].StringValue.Trim(),
+                    Iterations = new(),
+                    Dependencies = new()
+                };
+                act.Iterations.Add(new() { Cost = row.Columns[4].DoubleValue, Duration = row.Columns[3].IntValue });
+                act.Iterations.Add(new() { Cost = row.Columns[6].DoubleValue, Duration = row.Columns[5].IntValue });
+                act.Iterations.Add(new() { Cost = row.Columns[8].DoubleValue, Duration = row.Columns[7].IntValue });
+                act.Iterations.Add(new() { Cost = row.Columns[10].DoubleValue, Duration = row.Columns[9].IntValue });
+                act.Iterations.Add(new() { Cost = row.Columns[12].DoubleValue, Duration = row.Columns[11].IntValue });
+                var deps = row.Columns[2].StringValue.Replace(" ", "").Split(',');
+                foreach (var dep in deps)
+                {
+                    if (dep != null && dep != "")
+                    {
+                        act.Dependencies.Add(dep);
+                    }
+                }
 
-            var act2 = new Models.Activity()
-            {
-                Id = "A35770",
-                Name = "Excavation For foundation",
-                Dependencies = new(),
-                Iterations = new List<Iteration>()
-            };
-            act2.Iterations.Add(new() { Cost = 357860, Duration = 30 });
-            act2.Iterations.Add(new() { Cost = 369436, Duration = 23 });
-            act2.Iterations.Add(new() { Cost = 376140, Duration = 20 });
-            act2.Iterations.Add(new() { Cost = 351004, Duration = 35 });
-            act2.Iterations.Add(new() { Cost = 347500, Duration = 37 });
-            act2.Dependencies.Add("A35760");
-            space.activities.Add(act2);
+                space.activities.Add(act);
 
-            var act3 = new Models.Activity()
-            {
-                Id = "A35780",
-                Name = "Backfilling between foundation",
-                Dependencies = new(),
-                Iterations = new List<Iteration>()
-            };
-            act3.Iterations.Add(new() { Cost = 63370, Duration = 30 });
-            act3.Iterations.Add(new() { Cost = 68970, Duration = 25 });
-            act3.Iterations.Add(new() { Cost = 77370, Duration = 20 });
-            act3.Iterations.Add(new() { Cost = 54970, Duration = 33 });
-            act3.Iterations.Add(new() { Cost = 54970, Duration = 33 });
-            act3.Dependencies.Add("A35820");
-            space.activities.Add(act3);
 
-            var act4 = new Models.Activity()
-            {
-                Id = "A35810",
-                Name = "Pc for foundation",
-                Dependencies = new(),
-                Iterations = new List<Iteration>()
-            };
-            act4.Iterations.Add(new() { Cost = 318019, Duration = 2 });
-            act4.Iterations.Add(new() { Cost = 317019, Duration = 3 });
-            act4.Iterations.Add(new() { Cost = 318019, Duration = 2 });
-            act4.Iterations.Add(new() { Cost = 316819, Duration = 4 });
-            act4.Iterations.Add(new() { Cost = 316619, Duration = 5 });
-            act4.Dependencies.Add("A35770");
-            space.activities.Add(act4);
-
-            var act5 = new Models.Activity()
-            {
-                Id = "A35820",
-                Name = "Rc foundation",
-                Dependencies = new(),
-                Iterations = new List<Iteration>()
-            };
-            act5.Iterations.Add(new() { Cost = 1813528, Duration = 17 });
-            act5.Iterations.Add(new() { Cost = 1814632, Duration = 15 });
-            act5.Iterations.Add(new() { Cost = 1815936, Duration = 13 });
-            act5.Iterations.Add(new() { Cost = 1812976, Duration = 19 });
-            act5.Iterations.Add(new() { Cost = 1812776, Duration = 22 });
-            act5.Dependencies.Add("A35810");
-            space.activities.Add(act5);
-
-            var act6 = new Models.Activity()
-            {
-                Id = "A35830",
-                Name = "Rc for retaining walls",
-                Dependencies = new(),
-                Iterations = new List<Iteration>()
-            };
-            act6.Iterations.Add(new() { Cost = 1148419, Duration = 17 });
-            act6.Iterations.Add(new() { Cost = 1150274, Duration = 15 });
-            act6.Iterations.Add(new() { Cost = 1151778, Duration = 13 });
-            act6.Iterations.Add(new() { Cost = 1148218, Duration = 20 });
-            act6.Iterations.Add(new() { Cost = 1148018, Duration = 23 });
-            act6.Dependencies.Add("A35820");
-            space.activities.Add(act6);
-
-            var act7 = new Models.Activity()
-            {
-                Id = "A35860",
-                Name = "Rc slabs and beams",
-                Dependencies = new(),
-                Iterations = new List<Iteration>()
-            };
-            act7.Iterations.Add(new() { Cost = 777314, Duration = 21 });
-            act7.Iterations.Add(new() { Cost = 779018, Duration = 18 });
-            act7.Iterations.Add(new() { Cost = 780322, Duration = 14 });
-            act7.Iterations.Add(new() { Cost = 776762, Duration = 25 });
-            act7.Iterations.Add(new() { Cost = 776562, Duration = 27 });
-            act7.Dependencies.Add("A35830");
-            act7.Dependencies.Add("A35870");
-            space.activities.Add(act7);
-
-            var act8 = new Models.Activity()
-            {
-                Id = "A35870",
-                Name = "Rc for columns and walls",
-                Dependencies = new(),
-                Iterations = new List<Iteration>()
-            };
-            act8.Iterations.Add(new() { Cost = 300604, Duration = 7 });
-            act8.Iterations.Add(new() { Cost = 302460, Duration = 6 });
-            act8.Iterations.Add(new() { Cost = 304116, Duration = 5 });
-            act8.Iterations.Add(new() { Cost = 299852, Duration = 9 });
-            act8.Iterations.Add(new() { Cost = 299300, Duration = 11 });
-            act8.Dependencies.Add("A35820");
-            space.activities.Add(act8);
+            }
 
             return space;
         }
