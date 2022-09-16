@@ -14,70 +14,94 @@ namespace Navis_Plug
 
         private void button1_Click(object sender, EventArgs e)
         {
-            int targetDuration = 0;
-            double targetCost;
-            Space space = GetSpace(out targetCost);
-            List<Person> population = GeneratePopulation(space);
-            int generation = 1;
-            long minDurationReached = long.MaxValue;
-            int consistency = 0;
-            int maximumConsitency = 500;
-            while (minDurationReached > targetDuration && consistency < maximumConsitency)
+            var runTimesInput = numericUpDown1.Value;
+            var targetCostPercentage = numericUpDown3.Value;
+            var minimmumTotalDuration = long.MaxValue;
+            string fileNameForMinDuration = "";
+            for (int runTimes = 0; runTimes < runTimesInput; runTimes++)
             {
-                long newMinDuration;
-                population = SortPopulation(population, out newMinDuration);
-                if (newMinDuration >= minDurationReached) consistency++;
-                else minDurationReached = newMinDuration;
+                // intializ variables in this function //
 
-                var newPopulation = new List<Person>(population.Take(10));
-                var top50 = new List<Person>(population.Take(50));
-                for (int i = 0; i < 90; i++)
-                {
-                    //Complete the new population
-                    Random rn = new();
-                    var parent1 = top50[rn.Next(50)];
-                    var parent2 = top50[rn.Next(50)];
-                    var child = MatePersons(parent1, parent2, space);
-                    newPopulation.Add(child);
-                }
+                //targetDuration is used for set the most prefered deuration that we want to reach..
+                //it's impossible to reach to 0 but we but it to make our algorithm try to get it
+                int targetDuration = 0;
+                double targetCost;
+                Space space = GetSpace(out targetCost, (int)targetCostPercentage);
+                List<Person> population = GeneratePopulation(space);
+                int generation = 1;
+                long minDurationReached = long.MaxValue;
 
-                population = newPopulation;
-                generation++;
-            }
-            population = SortPopulation(population, out _);
-            var targetIndex = 0;
-            var cost = double.MaxValue;
-            for (int i = 0; i < population.Count; i++)
-            {
-                double totalCost = 0;
-                var person = population[i];
-                foreach (var activity in person.activities)
+                int consistency = 0;
+
+                // maximumConsitency used for set the limit of iterations when the fitness score have same value//
+                int maximumConsitency = (int)numericUpDown2.Value;
+                while (minDurationReached > targetDuration && consistency < maximumConsitency)
                 {
-                    totalCost += activity.Iteration.Cost;
-                }
-                if (totalCost <= targetCost)
-                {
-                    targetIndex = i;
-                    cost = totalCost;
-                    break;
-                }
-            }
-            var output = population[targetIndex];
-            using (StreamWriter writer = new StreamWriter("output.csv", false))
-            {
-                writer.WriteLine("Activity Name,Activity ID,Duration,Cost,Predecessors");
-                writer.WriteLine("All Activities,,"+ output.TotalDuration+"," + cost + ",");
-                foreach (var act in output.activities)
-                {
-                    var str = act.Name + "," + act.Id + "," + act.Iteration.Duration + "," + act.Iteration.Cost + ",";
-                    foreach (var dep in act.Dependencies)
+                    long newMinDuration;
+                    population = SortPopulation(population, out newMinDuration);
+                    if (newMinDuration >= minDurationReached) consistency++;
+                    else minDurationReached = newMinDuration;
+
+                    var newPopulation = new List<Person>(population.Take(10));
+                    var top50 = new List<Person>(population.Take(50));
+                    for (int i = 0; i < 90; i++)
                     {
-                        str += dep+"-";
+                        //Complete the new population
+                        Random rn = new();
+                        var parent1 = top50[rn.Next(50)];
+                        var parent2 = top50[rn.Next(50)];
+                        var child = MatePersons(parent1, parent2, space);
+                        newPopulation.Add(child);
                     }
-                    writer.WriteLine(str.Substring(0,str.Length - 1));
+
+                    population = newPopulation;
+                    generation++;
+                }
+                population = SortPopulation(population, out _);
+                var targetIndex = 0;
+                var cost = double.MaxValue;
+                for (int i = 0; i < population.Count; i++)
+                {
+                    double totalCost = 0;
+                    var person = population[i];
+                    foreach (var activity in person.activities)
+                    {
+                        totalCost += activity.Iteration.Cost;
+                    }
+                    if (totalCost <= targetCost)
+                    {
+                        targetIndex = i;
+                        cost = totalCost;
+                        break;
+                    }
+                }
+                var output = population[targetIndex];
+                var date = DateTime.Now;
+                var stringDate = date.ToString("yyyyMMddHmmss");
+                using (StreamWriter writer = new StreamWriter("output\\" + stringDate + ".csv", false))
+                {
+                    writer.WriteLine("Activity Name,Activity ID,Duration,Cost,Predecessors");
+                    writer.WriteLine("All Activities,," + output.TotalDuration + "," + cost + ",");
+                    if (output.TotalDuration < minimmumTotalDuration)
+                    {
+                        minimmumTotalDuration = output.TotalDuration;
+                        fileNameForMinDuration = stringDate;
+                    }
+                    foreach (var act in output.activities)
+                    {
+                        var str = act.Name + "," + act.Id + "," + act.Iteration.Duration + "," + act.Iteration.Cost + ",";
+                        foreach (var dep in act.Dependencies)
+                        {
+                            str += dep + "-";
+                        }
+                        writer.WriteLine(str.Substring(0, str.Length - 1));
+                    }
                 }
             }
-
+            using (StreamWriter writer = new StreamWriter("output\\minDurationFileName.txt", false))
+            {
+                writer.WriteLine(fileNameForMinDuration);
+            }
             this.textBox1.Text = "DONE!";
 
         }
@@ -252,11 +276,11 @@ namespace Navis_Plug
             return GetFreeEndActivities(list);
         }
 
-        private Space GetSpace(out double targetCost)
+        private Space GetSpace(out double targetCost, int targetPercentage)
         {
             WorkBook workbook = WorkBook.Load("test.xlsx");
             WorkSheet sheet = workbook.WorkSheets.First();
-            targetCost = sheet.Rows[1].Columns[4].DoubleValue * 1.1;
+            targetCost = sheet.Rows[1].Columns[4].DoubleValue * (1 + targetPercentage/100);
             var numberOfActivities = sheet.RowCount - 2;
             var space = new Space();
             space.activities = new();
@@ -290,6 +314,16 @@ namespace Navis_Plug
             }
 
             return space;
+        }
+
+        private void label2_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void textBox1_TextChanged(object sender, EventArgs e)
+        {
+
         }
     }
 }
